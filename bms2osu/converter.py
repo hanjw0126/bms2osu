@@ -26,6 +26,7 @@ class Converted:
     # keysounds to play: (time_ms, wav id). BGM (ch 01) + every playable note,
     # including scratch notes that were removed from the playfield.
     sounds: List[Tuple[float, str]] = field(default_factory=list)
+    bms_notes: int = 0  # playable notes in the BMS (scratch included, LN = 1)
 
 
 def classify_channel(ch: str):
@@ -164,6 +165,7 @@ def convert_chart(chart: BmsChart, remove_scratch: bool = False) -> Converted:
             warnings.append(f"레인 {lane}: 끝나지 않은 롱노트를 일반 노트로 처리함")
 
     # ---- 5. keysounds of playable notes (LN end / #LNOBJ end make no sound) --
+    note_sounds = len(sounds)
     per_key: Dict[Tuple[int, object], list] = {}
     for player, key, is_long, value, time in raw:
         per_key.setdefault((player, key), []).append((time, value, is_long))
@@ -179,6 +181,7 @@ def convert_chart(chart: BmsChart, remove_scratch: bool = False) -> Converted:
                 continue
             else:
                 sounds.append((time, value))
+    bms_notes = len(sounds) - note_sounds
     sounds.sort()
 
     # ---- 6. timing points ----------------------------------------------------
@@ -194,4 +197,5 @@ def convert_chart(chart: BmsChart, remove_scratch: bool = False) -> Converted:
         double=double,
         warnings=warnings,
         sounds=sounds,
+        bms_notes=bms_notes,
     )

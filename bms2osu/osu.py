@@ -37,14 +37,20 @@ def render_osu(
     od: float = 8.0,
     hp: float = 8.0,
     version: Optional[str] = None,
+    title: Optional[str] = None,
+    artist: Optional[str] = None,
+    tags: Optional[str] = None,
 ) -> str:
     h = chart.headers
-    title = h.get("TITLE", chart.path.stem)
-    subtitle = h.get("SUBTITLE", "")
-    if subtitle:
-        title = f"{title} {subtitle}"
-    artist = h.get("ARTIST", "Unknown")
+    if title is None:
+        title = h.get("TITLE", chart.path.stem)
+        subtitle = h.get("SUBTITLE", "")
+        if subtitle:
+            title = f"{title} {subtitle}"
+    artist = artist or h.get("ARTIST", "Unknown")
     version = version or version_name(chart, conv.keys)
+    if tags is None:
+        tags = h.get("GENRE", "")
 
     out = [
         "osu file format v14",
@@ -75,7 +81,7 @@ def render_osu(
         f"Creator:{creator}",
         f"Version:{version}",
         "Source:BMS",
-        f"Tags:{h.get('GENRE', '')}",
+        f"Tags:{tags}",
         "BeatmapID:0",
         "BeatmapSetID:-1",
         "",

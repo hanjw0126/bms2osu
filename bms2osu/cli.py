@@ -26,8 +26,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-keysound", action="store_true",
                    help="키음 합성을 하지 않고 폴더의 오디오 파일을 그대로 사용")
     p.add_argument("--creator", default="bms2osu", help="채보 제작자 이름 (기본: bms2osu)")
-    p.add_argument("--od", type=float, default=8.0, help="Overall Difficulty (기본 8)")
-    p.add_argument("--hp", type=float, default=8.0, help="HP Drain (기본 8)")
+    p.add_argument("--od", type=float, default=None,
+                   help="Overall Difficulty 직접 지정 (기본: BMS 판정 #RANK로 자동, 보정을 끄면 8)")
+    p.add_argument("--hp", type=float, default=None,
+                   help="HP Drain 직접 지정 (기본: BMS 게이지 #TOTAL로 자동, 보정을 끄면 8)")
+    p.add_argument("--no-difficulty-fix", action="store_true",
+                   help="BMS 난이도 보정 끄기 (난이도 이름·곡 제목·OD·HP를 예전 방식으로)")
     p.add_argument("--encoding", help="BMS 텍스트 인코딩 강제 지정 (기본: 자동 감지)")
     p.add_argument("-j", "--jobs", type=int, default=0, help="병렬 처리 수 (기본: CPU 수, 최대 8)")
     p.add_argument("--no-recursive", action="store_true", help="폴더 하위를 검색하지 않음")
@@ -55,6 +59,7 @@ def main(argv=None) -> int:
         remove_scratch=args.remove_scratch, fmt=args.format, audio=args.audio,
         creator=args.creator, od=args.od, hp=args.hp, encoding=args.encoding,
         render_keysounds=not args.no_keysound,
+        fix_difficulty=not args.no_difficulty_fix,
     )
     jobs = plan_jobs(groups, args.output)
     total = len(jobs)

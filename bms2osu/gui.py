@@ -121,11 +121,13 @@ class App:
         self.v_parallel = tk.BooleanVar(value=True)
         self.v_open = tk.BooleanVar(value=True)
         self.v_keysound = tk.BooleanVar(value=True)
+        self.v_diffix = tk.BooleanVar(value=True)
 
         simple = ttk.Frame(box)
         simple.grid(row=0, column=0, columnspan=3, sticky="ew")
         for i, (var, label) in enumerate([
             (self.v_keysound, "키음을 하나의 음원으로 합성 (권장)"),
+            (self.v_diffix, "BMS 난이도 보정 (난이도 이름·OD·HP 자동)"),
             (self.v_scratch, "스크래치 제거 (7키 / 더블 14키)"),
             (self.v_recursive, "하위 폴더까지 검색"),
             (self.v_osz, ".osz 패키지로 저장 (해제 시 .osu 폴더)"),
@@ -187,7 +189,7 @@ class App:
                                          width=12, state="readonly")),
         ])
         hint = "체크하지 않은 항목은 기본값 사용: 출력 폴더 " + str(default_output_dir()) + \
-               ", 제작자 bms2osu, OD/HP 8, 인코딩 자동"
+               ", 제작자 bms2osu, OD/HP 자동(BMS 판정·게이지 기준, 보정을 끄면 8), 인코딩 자동"
         ttk.Label(box, text=hint, foreground="gray", wraplength=680).grid(
             row=row, column=0, columnspan=3, sticky="w", pady=(6, 0))
 
@@ -293,8 +295,8 @@ class App:
 
     def _options(self) -> Optional[Options]:
         try:
-            od = float(self.v_od.get()) if self.v_diff_on.get() else 8.0
-            hp = float(self.v_hp.get()) if self.v_diff_on.get() else 8.0
+            od = float(self.v_od.get()) if self.v_diff_on.get() else None
+            hp = float(self.v_hp.get()) if self.v_diff_on.get() else None
         except (tk.TclError, ValueError):
             messagebox.showerror("bms2osu", "OD / HP 값은 숫자여야 합니다.")
             return None
@@ -305,10 +307,11 @@ class App:
             fmt="osz" if self.v_osz.get() else "osu",
             audio=audio or None,
             creator=creator or "bms2osu",
-            od=max(0.0, min(10.0, od)),
-            hp=max(0.0, min(10.0, hp)),
+            od=None if od is None else max(0.0, min(10.0, od)),
+            hp=None if hp is None else max(0.0, min(10.0, hp)),
             encoding=self.v_enc.get() if self.v_enc_on.get() else None,
             render_keysounds=self.v_keysound.get(),
+            fix_difficulty=self.v_diffix.get(),
         )
 
     def _output_dir(self) -> Path:

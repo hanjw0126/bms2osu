@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from . import keysound
+from . import difficulty, keysound
 from .converter import convert_chart
 from .osu import render_osu, safe_filename, version_name
 from .parser import parse_bms
@@ -22,9 +22,10 @@ class Options:
     fmt: str = "osz"  # "osz" or "osu"
     audio: Optional[str] = None
     creator: str = "bms2osu"
-    od: float = 8.0
-    hp: float = 8.0
+    od: Optional[float] = None  # None = automatic (from BMS when fix_difficulty, else 8)
+    hp: Optional[float] = None
     encoding: Optional[str] = None
+    fix_difficulty: bool = True  # BMS difficulty -> osu! name / OD / HP / set title
     render_keysounds: bool = True  # mix BMS keysounds into one audio file
 
 
@@ -123,17 +124,35 @@ def process_group(folder: str, files: List[str], out_dir: str, out_stem: str, op
 
         built = []
         used = set()
+        if opts.fix_difficulty:
+            infos = difficulty.chart_infos(
+                [(c.headers, c.path.stem, conv.bms_notes) for c, conv in parsed])
+            set_title, set_artist = difficulty.set_metadata(
+                [c.headers for c, _ in parsed], folder_p.name)
         for i, (chart, conv) in enumerate(parsed):
-            version = version_name(chart, conv.keys)
+            if opts.fix_difficulty:
+                info = infos[i]
+                version, title, artist = info.version, set_title, set_artist
+                od = opts.od if opts.od is not None else info.od
+                hp = opts.hp if opts.hp is not None else info.hp
+                tags = " ".join(t for t in (
+                    chart.headers.get("GENRE", ""), "BMS",
+                    info.label or "", f"lv{info.level}" if info.level else "") if t)
+            else:
+                version = version_name(chart, conv.keys)
+                title = artist = tags = None
+                od = opts.od if opts.od is not None else 8.0
+                hp = opts.hp if opts.hp is not None else 8.0
             text = render_osu(
                 chart, conv,
                 audio_name=chart_audio[i],
                 bg_name=bg.name if bg else None,
-                creator=opts.creator, od=opts.od, hp=opts.hp, version=version,
+                creator=opts.creator, od=od, hp=hp, version=version,
+                title=title, artist=artist, tags=tags,
             )
-            artist = chart.headers.get("ARTIST", "Unknown")
-            title = chart.headers.get("TITLE", chart.path.stem)
-            base = safe_filename(f"{artist} - {title} ({opts.creator}) [{version}]")
+            name_artist = artist or chart.headers.get("ARTIST", "Unknown")
+            name_title = title or chart.headers.get("TITLE", chart.path.stem)
+            base = safe_filename(f"{name_artist} - {name_title} ({opts.creator}) [{version}]")
             fname, n = base + ".osu", 2
             while fname.lower() in used:
                 fname = f"{base}_{n}.osu"
