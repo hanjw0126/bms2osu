@@ -120,10 +120,12 @@ class App:
         self.v_osz = tk.BooleanVar(value=True)
         self.v_parallel = tk.BooleanVar(value=True)
         self.v_open = tk.BooleanVar(value=True)
+        self.v_keysound = tk.BooleanVar(value=True)
 
         simple = ttk.Frame(box)
         simple.grid(row=0, column=0, columnspan=3, sticky="ew")
         for i, (var, label) in enumerate([
+            (self.v_keysound, "키음을 하나의 음원으로 합성 (권장)"),
             (self.v_scratch, "스크래치 제거 (7키 / 더블 14키)"),
             (self.v_recursive, "하위 폴더까지 검색"),
             (self.v_osz, ".osz 패키지로 저장 (해제 시 .osu 폴더)"),
@@ -178,14 +180,14 @@ class App:
         ])
         add_row(self.v_audio_on, "오디오 파일 지정", [
             lambda f: _pack(ttk.Entry(f, textvariable=self.v_audio), fill="x", expand=True),
-            lambda f: _pack(ttk.Label(f, text="(각 폴더 기준 파일명)", foreground="gray"), padx=(6, 0)),
+            lambda f: _pack(ttk.Label(f, text="(각 폴더 기준 파일명, 키음 합성 대신 사용)", foreground="gray"), padx=(6, 0)),
         ])
         add_row(self.v_enc_on, "인코딩 강제 지정", [
             lambda f: _pack(ttk.Combobox(f, textvariable=self.v_enc, values=ENCODINGS,
                                          width=12, state="readonly")),
         ])
         hint = "체크하지 않은 항목은 기본값 사용: 출력 폴더 " + str(default_output_dir()) + \
-               ", 제작자 bms2osu, OD/HP 8, 오디오·인코딩 자동"
+               ", 제작자 bms2osu, OD/HP 8, 인코딩 자동"
         ttk.Label(box, text=hint, foreground="gray", wraplength=680).grid(
             row=row, column=0, columnspan=3, sticky="w", pady=(6, 0))
 
@@ -306,6 +308,7 @@ class App:
             od=max(0.0, min(10.0, od)),
             hp=max(0.0, min(10.0, hp)),
             encoding=self.v_enc.get() if self.v_enc_on.get() else None,
+            render_keysounds=self.v_keysound.get(),
         )
 
     def _output_dir(self) -> Path:

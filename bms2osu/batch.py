@@ -1,11 +1,13 @@
 """Folder-level processing: one folder of BMS charts -> one osu! beatmapset."""
 from __future__ import annotations
 
+import tempfile
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
+from . import keysound
 from .converter import convert_chart
 from .osu import render_osu, safe_filename, version_name
 from .parser import parse_bms
@@ -23,6 +25,7 @@ class Options:
     od: float = 8.0
     hp: float = 8.0
     encoding: Optional[str] = None
+    render_keysounds: bool = True  # mix BMS keysounds into one audio file
 
 
 @dataclass
@@ -35,7 +38,7 @@ class GroupResult:
     error: Optional[str] = None
 
 
-def pick_audio(folder: Path, chart_stems, explicit: Optional[str]) -> Tuple[Optional[Path], Optional[str]]:
+def pick_audio(folder: Path, chart_stems, explicit: Optional[str], keysound_names=()) -> Tuple[Optional[Path], Optional[str]]:
     if explicit:
         p = Path(explicit)
         cand = p if p.is_absolute() else folder / p
@@ -46,7 +49,11 @@ def pick_audio(folder: Path, chart_stems, explicit: Optional[str]) -> Tuple[Opti
     if not files:
         return None, "폴더에서 오디오 파일을 찾지 못함 (BMS 키음을 하나로 렌더링한 파일이 필요, --audio 참고)"
     stems = {s.lower() for s in chart_stems}
-    pool = [f for f in files if f.stem.lower() in stems] or files
+    # files used as keysounds (#WAVxx) are single sounds, not the full song
+    used = {Path(n.replace("\\", "/")).stem.lower() for n in keysound_names}
+    pool = ([f for f in files if f.stem.lower() in stems]
+            or [f for f in files if f.stem.lower() not in used]
+            or files)
     best = max(pool, key=lambda f: f.stat().st_size)
     note = None
     if len(files) > 1:
@@ -69,6 +76,7 @@ def pick_background(folder: Path, charts) -> Optional[Path]:
 def process_group(folder: str, files: List[str], out_dir: str, out_stem: str, opts: Options) -> GroupResult:
     folder_p = Path(folder)
     res = GroupResult(folder=str(folder_p))
+    tmp = None
     try:
         parsed = []
         for f in sorted(files):
@@ -85,19 +93,41 @@ def process_group(folder: str, files: List[str], out_dir: str, out_stem: str, op
             res.error = "변환 가능한 채보가 없음"
             return res
 
-        audio, audio_msg = pick_audio(folder_p, [c.path.stem for c, _ in parsed], opts.audio)
-        if audio_msg:
-            res.warnings.append(audio_msg)
         bg = pick_background(folder_p, [c for c, _ in parsed])
-        audio_name = audio.name if audio else "audio.mp3"
+        tmp = tempfile.TemporaryDirectory(prefix="bms2osu_")
+        tmp_dir = Path(tmp.name)
+        # per chart audio name, plus audio files to ship: (name in set, path on disk)
+        chart_audio: Dict[int, str] = {}
+        media: List[Tuple[str, Path]] = []
+
+        if opts.render_keysounds and not opts.audio:
+            reason = keysound.available()
+            if reason:
+                res.warnings.append(reason)
+            else:
+                _render_keysounds(folder_p, parsed, tmp_dir, chart_audio, media, res)
+
+        if len(chart_audio) < len(parsed):
+            names = [n for c, _ in parsed for n in c.wav_table.values()]
+            audio, audio_msg = pick_audio(
+                folder_p, [c.path.stem for c, _ in parsed], opts.audio, names)
+            if audio_msg:
+                res.warnings.append(audio_msg)
+            fallback = audio.name if audio else "audio.mp3"
+            if audio and all(m[0].lower() != audio.name.lower() for m in media):
+                media.append((audio.name, audio))
+            for i in range(len(parsed)):
+                chart_audio.setdefault(i, fallback)
+        if bg:
+            media.append((bg.name, bg))
 
         built = []
         used = set()
-        for chart, conv in parsed:
+        for i, (chart, conv) in enumerate(parsed):
             version = version_name(chart, conv.keys)
             text = render_osu(
                 chart, conv,
-                audio_name=audio_name,
+                audio_name=chart_audio[i],
                 bg_name=bg.name if bg else None,
                 creator=opts.creator, od=opts.od, hp=opts.hp, version=version,
             )
@@ -119,19 +149,50 @@ def process_group(folder: str, files: List[str], out_dir: str, out_stem: str, op
             with zipfile.ZipFile(target, "w") as z:
                 for fname, text in built:
                     z.writestr(fname, text.encode("utf-8"), compress_type=zipfile.ZIP_DEFLATED)
-                for media in (audio, bg):
-                    if media:
-                        z.write(media, media.name, compress_type=zipfile.ZIP_STORED)
+                for arc, path in media:
+                    z.write(path, arc, compress_type=zipfile.ZIP_STORED)
         else:
             target = out / out_stem
             target.mkdir(parents=True, exist_ok=True)
             for fname, text in built:
                 (target / fname).write_text(text, encoding="utf-8")
-            if audio:
-                (target / audio.name).write_bytes(audio.read_bytes())
-            if bg:
-                (target / bg.name).write_bytes(bg.read_bytes())
+            for arc, path in media:
+                (target / arc).write_bytes(path.read_bytes())
         res.output = str(target)
     except Exception as e:  # keep batch going
         res.error = f"{type(e).__name__}: {e}"
+    finally:
+        if tmp is not None:
+            tmp.cleanup()
     return res
+
+
+def _render_keysounds(folder: Path, parsed, tmp_dir: Path, chart_audio, media, res) -> None:
+    """Mix each chart's keysounds into one file; identical mixes share one file."""
+    index = keysound.build_index(folder)
+    cache: Dict[Path, object] = {}
+    by_signature: Dict[tuple, str] = {}
+    for i, (chart, conv) in enumerate(parsed):
+        name = chart.path.name
+        events, missing = keysound.resolve_events(conv.sounds, chart.wav_table, index)
+        if missing:
+            ex = ", ".join(missing[:3]) + (" 등" if len(missing) > 3 else "")
+            res.warnings.append(f"{name}: 키음 파일 {len(missing)}개를 찾지 못함 ({ex})")
+        sig = keysound.signature(events)
+        if sig in by_signature:
+            chart_audio[i] = by_signature[sig]
+            continue
+        try:
+            data = keysound.mix(events, cache, keysound.chart_volume(chart.headers))
+        except MemoryError:
+            res.warnings.append(f"{name}: 메모리 부족으로 키음 합성 실패, 폴더 오디오 사용")
+            continue
+        if data is None:
+            res.warnings.append(f"{name}: 합성할 키음이 없어 폴더의 오디오 파일을 사용")
+            continue
+        stem = "audio" if not by_signature else f"audio_{len(by_signature) + 1}"
+        path = keysound.write_audio(data, tmp_dir / stem)
+        by_signature[sig] = path.name
+        chart_audio[i] = path.name
+        media.append((path.name, path))
+    cache.clear()

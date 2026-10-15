@@ -33,9 +33,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pyinstaller tkinterdnd2
+      - run: pip install pyinstaller tkinterdnd2 numpy soundfile
       - run: python -m unittest discover -s tests -v
       - run: pyinstaller ${{ matrix.mode }} --windowed --noconfirm --name bms2osu --collect-all tkinterdnd2 entry.py
+      - name: Smoke test (frozen binary renders keysounds)
+        shell: bash
+        run: |
+          python tests/make_smoke.py smoke
+          if [[ -f dist/bms2osu.exe ]]; then BIN=dist/bms2osu.exe
+          elif [[ -d dist/bms2osu.app ]]; then BIN=dist/bms2osu.app/Contents/MacOS/bms2osu
+          else BIN=dist/bms2osu; fi
+          "$BIN" smoke/song -o smoke_out -j 1
+          python -c "import zipfile; n = zipfile.ZipFile('smoke_out/song.osz').namelist(); print(n); assert 'audio.ogg' in n, n"
       - name: Package
         shell: bash
         run: |

@@ -22,7 +22,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="스크래치 노트 제거 (7키 / 더블이면 14키). 지정하지 않으면 8키 / 16키")
     p.add_argument("--format", choices=("osz", "osu"), default="osz",
                    help="osz: 오디오 포함 패키지(기본), osu: 폴더에 .osu 파일로 출력")
-    p.add_argument("--audio", help="오디오 파일명(폴더 기준) 또는 절대 경로. 생략하면 폴더에서 자동 선택")
+    p.add_argument("--audio", help="오디오 파일명(폴더 기준) 또는 절대 경로. 지정하면 키음 합성 대신 이 파일 사용")
+    p.add_argument("--no-keysound", action="store_true",
+                   help="키음 합성을 하지 않고 폴더의 오디오 파일을 그대로 사용")
     p.add_argument("--creator", default="bms2osu", help="채보 제작자 이름 (기본: bms2osu)")
     p.add_argument("--od", type=float, default=8.0, help="Overall Difficulty (기본 8)")
     p.add_argument("--hp", type=float, default=8.0, help="HP Drain (기본 8)")
@@ -52,6 +54,7 @@ def main(argv=None) -> int:
     opts = Options(
         remove_scratch=args.remove_scratch, fmt=args.format, audio=args.audio,
         creator=args.creator, od=args.od, hp=args.hp, encoding=args.encoding,
+        render_keysounds=not args.no_keysound,
     )
     jobs = plan_jobs(groups, args.output)
     total = len(jobs)

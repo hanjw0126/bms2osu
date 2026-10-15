@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bms2osu"
-version = "0.2.0"
+version = "0.3.0"
 description = "Batch converter: BMS/BME/BML charts to osu!mania beatmaps"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -12,7 +12,8 @@ license = { text = "MIT" }
 dependencies = []
 
 [project.optional-dependencies]
-gui = ["tkinterdnd2>=0.4"]
+audio = ["numpy>=1.21", "soundfile>=0.12"]
+gui = ["tkinterdnd2>=0.4", "numpy>=1.21", "soundfile>=0.12"]
 
 [project.scripts]
 bms2osu = "bms2osu.cli:main"

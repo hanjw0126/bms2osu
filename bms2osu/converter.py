@@ -23,6 +23,9 @@ class Converted:
     timing: List[Tuple[int, float]]  # (ms, bpm)
     double: bool
     warnings: List[str] = field(default_factory=list)
+    # keysounds to play: (time_ms, wav id). BGM (ch 01) + every playable note,
+    # including scratch notes that were removed from the playfield.
+    sounds: List[Tuple[float, str]] = field(default_factory=list)
 
 
 def classify_channel(ch: str):
@@ -85,6 +88,8 @@ def convert_chart(chart: BmsChart, remove_scratch: bool = False) -> Converted:
                 missing.add("STOP" + o.value)
             elif stop > 0:
                 add(o.measure, o.pos, 2, "stop", stop)
+        elif ch == "01":
+            add(o.measure, o.pos, 1, "bgm", o.value)
         else:
             c = classify_channel(ch)
             if c:
@@ -97,6 +102,7 @@ def convert_chart(chart: BmsChart, remove_scratch: bool = False) -> Converted:
     t = 0.0
     timing = [(0.0, bpm)]
     raw = []  # (player, key, is_long, value, time_ms)
+    sounds: List[Tuple[float, str]] = []
     for m in range(max_measure + 1):
         length = chart.measure_len.get(m, 1.0)
         prev = 0.0
@@ -110,6 +116,8 @@ def convert_chart(chart: BmsChart, remove_scratch: bool = False) -> Converted:
                 timing.append((t, bpm))
             elif kind == "stop":
                 t += payload / 48.0 * 60000.0 / bpm  # 192 units = 4 beats
+            elif kind == "bgm":
+                sounds.append((t, payload))
             else:
                 (player, key, is_long), value = payload
                 raw.append((player, key, is_long, value, t))
@@ -155,7 +163,25 @@ def convert_chart(chart: BmsChart, remove_scratch: bool = False) -> Converted:
             notes[(lane, pending.time)] = pending
             warnings.append(f"레인 {lane}: 끝나지 않은 롱노트를 일반 노트로 처리함")
 
-    # ---- 5. timing points ----------------------------------------------------
+    # ---- 5. keysounds of playable notes (LN end / #LNOBJ end make no sound) --
+    per_key: Dict[Tuple[int, object], list] = {}
+    for player, key, is_long, value, time in raw:
+        per_key.setdefault((player, key), []).append((time, value, is_long))
+    for objs in per_key.values():
+        objs.sort(key=lambda x: x[0])
+        ln_open = False
+        for time, value, is_long in objs:
+            if is_long:
+                if not ln_open:  # LN start plays, LN end is silent
+                    sounds.append((time, value))
+                ln_open = not ln_open
+            elif lnobj and value == lnobj:
+                continue
+            else:
+                sounds.append((time, value))
+    sounds.sort()
+
+    # ---- 6. timing points ----------------------------------------------------
     tp: Dict[int, float] = {}
     for ms, b in timing:
         tp[int(round(ms))] = b
@@ -167,4 +193,5 @@ def convert_chart(chart: BmsChart, remove_scratch: bool = False) -> Converted:
         timing=timing_out,
         double=double,
         warnings=warnings,
+        sounds=sounds,
     )
