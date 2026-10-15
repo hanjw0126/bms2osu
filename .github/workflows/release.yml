@@ -1,0 +1,68 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+    branches: [main]
+    paths: ["pyproject.toml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            built: dist/bms2osu.exe
+            artifact: bms2osu-windows.exe
+          - os: ubuntu-latest
+            built: dist/bms2osu
+            artifact: bms2osu-linux
+          - os: macos-latest
+            built: dist/bms2osu
+            artifact: bms2osu-macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m unittest discover -s tests -v
+      - run: pip install pyinstaller
+      - run: pyinstaller --onefile --name bms2osu entry.py
+      - name: Rename binary
+        shell: bash
+        run: mv "${{ matrix.built }}" "dist/${{ matrix.artifact }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Determine tag
+        id: tag
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "name=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            v=$(grep -m1 '^version' pyproject.toml | sed -E 's/.*"(.*)".*/\1/')
+            echo "name=v$v" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          files: dist/*
+          generate_release_notes: true

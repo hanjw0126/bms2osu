@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bms2osu"
+version = "0.1.0"
+description = "Batch converter: BMS/BME/BML charts to osu!mania beatmaps"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = []
+
+[project.scripts]
+bms2osu = "bms2osu.cli:main"
+
+[tool.setuptools]
+packages = ["bms2osu"]
