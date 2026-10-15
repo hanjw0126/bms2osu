@@ -4,7 +4,7 @@ import zipfile
 from pathlib import Path
 
 from bms2osu.batch import Options, process_group
-from bms2osu.cli import collect
+from bms2osu.runner import collect, plan_jobs, run_jobs
 from bms2osu.converter import convert_chart
 from bms2osu.osu import render_osu
 from bms2osu.parser import parse_bms
@@ -99,6 +99,32 @@ class ConverterTest(unittest.TestCase):
             names = z.namelist()
         self.assertEqual(sum(n.endswith(".osu") for n in names), 2)
         self.assertIn("bgm.ogg", names)
+
+    def test_runner_end_to_end(self):
+        for name in ("song", "other/song"):
+            d = self.dir / name
+            d.mkdir(parents=True)
+            (d / "a.bme").write_text(SAMPLE, encoding="utf-8")
+            (d / "bgm.ogg").write_bytes(b"fake")
+        groups, warnings = collect([str(self.dir / "song"), str(self.dir / "other"), str(self.dir / "nope")], True)
+        self.assertEqual(len(groups), 2)
+        self.assertEqual(len(warnings), 1)
+        jobs = plan_jobs(groups, str(self.dir / "out"))
+        self.assertEqual(sorted(j[3] for j in jobs), ["song", "song_2"])  # unique names
+        seen = []
+        results = run_jobs(jobs, Options(), workers=1, on_result=lambda i, t, r: seen.append((i, t)))
+        self.assertEqual(seen, [(1, 2), (2, 2)])
+        self.assertTrue(all(r.output and r.output.endswith(".osz") for r in results))
+
+
+class GuiImportTest(unittest.TestCase):
+    def test_gui_module_imports(self):
+        try:
+            import tkinter  # noqa: F401
+        except ImportError:
+            self.skipTest("tkinter not available")
+        import bms2osu.gui as gui
+        self.assertTrue(callable(gui.main))
 
 
 if __name__ == "__main__":

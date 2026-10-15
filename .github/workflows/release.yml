@@ -16,26 +16,34 @@ jobs:
       matrix:
         include:
           - os: windows-latest
+            mode: --onefile
             built: dist/bms2osu.exe
             artifact: bms2osu-windows.exe
           - os: ubuntu-latest
+            mode: --onefile
             built: dist/bms2osu
             artifact: bms2osu-linux
           - os: macos-latest
-            built: dist/bms2osu
-            artifact: bms2osu-macos
+            mode: --onedir
+            built: dist/bms2osu.app
+            artifact: bms2osu-macos.zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - run: pip install pyinstaller tkinterdnd2
       - run: python -m unittest discover -s tests -v
-      - run: pip install pyinstaller
-      - run: pyinstaller --onefile --name bms2osu entry.py
-      - name: Rename binary
+      - run: pyinstaller ${{ matrix.mode }} --windowed --noconfirm --name bms2osu --collect-all tkinterdnd2 entry.py
+      - name: Package
         shell: bash
-        run: mv "${{ matrix.built }}" "dist/${{ matrix.artifact }}"
+        run: |
+          if [[ "${{ matrix.built }}" == *.app ]]; then
+            ditto -c -k --keepParent "${{ matrix.built }}" "dist/${{ matrix.artifact }}"
+          else
+            mv "${{ matrix.built }}" "dist/${{ matrix.artifact }}"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}

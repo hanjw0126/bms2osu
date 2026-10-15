@@ -1,37 +1,55 @@
 # bms2osu
 
 BMS / BME / BML 채보를 **osu!mania** 채보(`.osu` / `.osz`)로 **일괄 변환**하는 도구입니다.
-Python 표준 라이브러리만 사용하므로 별도 설치가 필요 없습니다. (Python 3.9+)
+창(GUI)에서 폴더를 끌어다 놓고 버튼 한 번으로 변환합니다. (Python 3.9+, 드래그 앤 드롭은 `tkinterdnd2` 사용)
 
-*English: a dependency-free batch converter from BMS/BME/BML charts to osu!mania beatmaps. Run `bms2osu --help`.*
+*English: a batch converter from BMS/BME/BML charts to osu!mania beatmaps with a drag & drop GUI. CLI: `python -m bms2osu --help`.*
 
-## 사용법
+## 사용법 (프로그램)
+
+1. [Releases](https://github.com/hanjw0126/bms2osu/releases)에서 운영체제에 맞는 파일을 받아 실행합니다.
+   - Windows: `bms2osu-windows.exe` / macOS: `bms2osu-macos.zip`(압축 해제 후 `bms2osu.app`) / Linux: `bms2osu-linux`
+2. **BMS 폴더를 창으로 끌어다 놓습니다.** (여러 개 가능, 상위 폴더를 넣으면 하위 곡 폴더를 모두 찾음)
+   드롭 영역을 클릭하거나 `폴더 추가...` 버튼으로 골라도 됩니다. 폴더를 exe 아이콘 위에 드롭해도 목록에 들어간 채로 열립니다.
+3. 옵션 체크박스를 고른 뒤 **▶ 변환 시작**을 누르면 자동으로 변환됩니다. 진행률과 결과는 아래 로그에 표시됩니다.
+4. 생성된 `.osz` 파일을 더블클릭하거나 osu! 창에 끌어다 놓으면 가져와집니다.
+
+> macOS에서 처음 열 때 "확인되지 않은 개발자" 경고가 뜨면 앱을 우클릭 → **열기**를 선택하세요.
+
+### 옵션 (체크박스)
+
+| 체크박스 | 체크 시 | 체크 해제 시 (기본값) |
+|---|---|---|
+| 스크래치 제거 | **7키**(더블 14키) | **8키**(더블 16키) |
+| 하위 폴더까지 검색 | 하위 폴더 전부 검색 (기본 켜짐) | 넣은 폴더만 검색 |
+| .osz 패키지로 저장 | 오디오 포함 `.osz` (기본 켜짐) | 폴더에 `.osu` 파일로 저장 |
+| 병렬 처리 | CPU 코어 수만큼 동시 변환 (기본 켜짐) | 한 폴더씩 변환 |
+| 변환 후 출력 폴더 열기 | 끝나면 탐색기/Finder로 열기 (기본 켜짐) | 열지 않음 |
+| 출력 폴더 지정 | 입력한 폴더 | `문서/bms2osu_output` |
+| 제작자 이름 지정 | 입력한 이름 | `bms2osu` |
+| OD / HP 직접 지정 | 입력한 값 (0~10) | 8 / 8 |
+| 오디오 파일 지정 | 각 폴더 기준 파일명 | 폴더에서 가장 큰 오디오 자동 선택 |
+| 인코딩 강제 지정 | 선택한 인코딩 | utf-8 → cp932 → cp949 순으로 자동 |
+
+## 사용법 (명령줄)
+
+GUI 없이 쓸 수도 있습니다. 소스에서 실행할 때는 인자 없이 `python -m bms2osu`를 실행하면 창이 열립니다.
 
 ```bash
-# 폴더 전체(하위 폴더 포함)를 한 번에 변환 -> ./output/*.osz
-python -m bms2osu "D:/BMS/Songs"
-
-# 스크래치 제거 (7키), 출력 폴더 지정
-python -m bms2osu "D:/BMS/Songs" --remove-scratch -o out
-
-# 파일/폴더를 여러 개 지정
-python -m bms2osu a.bme "D:/BMS/PackA" "D:/BMS/PackB"
+pip install tkinterdnd2          # 드래그 앤 드롭용 (선택)
+python -m bms2osu                # GUI
+python -m bms2osu "D:/BMS/Songs" --remove-scratch -o out   # 명령줄
 ```
-
-릴리즈에서 받은 실행 파일(`bms2osu-windows.exe` 등)은 **폴더나 파일을 exe 위에 드래그 앤 드롭**해도 동작합니다.
-생성된 `.osz` 파일을 더블클릭하거나 osu! 창에 끌어다 놓으면 가져와집니다.
-
-### 옵션
 
 | 옵션 | 설명 |
 |---|---|
-| `--remove-scratch` | 스크래치 노트를 제거합니다. 제거: **7키**(더블 14키) / 유지: **8키**(더블 16키) |
+| `--remove-scratch` | 스크래치 노트 제거 (7키 / 더블 14키) |
 | `-o, --output DIR` | 출력 폴더 (기본 `./output`) |
-| `--format osz\|osu` | `osz`(기본): 오디오 포함 패키지 / `osu`: 폴더에 `.osu` 파일로 저장 |
-| `--audio NAME` | 오디오 파일명(각 폴더 기준) 또는 절대 경로. 생략 시 폴더에서 자동 선택 |
+| `--format osz\|osu` | `osz`(기본) / `osu` |
+| `--audio NAME` | 오디오 파일명 또는 절대 경로 |
 | `--creator NAME` | 채보 제작자 이름 |
 | `--od N`, `--hp N` | OD / HP 값 (기본 8) |
-| `--encoding ENC` | BMS 텍스트 인코딩 강제 지정 (기본: utf-8 → cp932 → cp949 순으로 자동) |
+| `--encoding ENC` | BMS 텍스트 인코딩 강제 지정 |
 | `-j, --jobs N` | 병렬 처리 수 |
 | `--no-recursive` | 폴더 하위 검색 안 함 |
 
